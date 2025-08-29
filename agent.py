@@ -7,6 +7,18 @@ import logging
 
 
 class Agent:
+    # Purpose: Initializes an Agent object with attributes and sets up logging.
+    # Inputs:
+    #   - id: int - Unique identifier for the agent.
+    #   - name: str - Name of the agent.
+    #   - role: str - Role of the agent (e.g., judge, lawyer).
+    #   - description: str - Description of the agent's purpose or responsibilities.
+    #   - llm: Any - Language model used for generating responses.
+    #   - db: Any - Database object for querying and storing information.
+    #   - log_think: bool (default=False) - Flag to enable logging of thought process.
+    # Outputs: None (initializes the agent object).
+    # Description: Sets up the agent with its identity, role, and resources (LLM and database).
+    #              Initializes a logger for debugging if log_think is enabled.
     def __init__(
         self,
         id: int,
@@ -27,11 +39,26 @@ class Agent:
 
         self.logger = logging.getLogger(__name__)
 
+    # Purpose: Provides a string representation of the agent.
+    # Inputs: None (uses instance attributes name and role).
+    # Outputs: str - A string in the format "{name} ({role})".
+    # Description: Returns a human-readable string combining the agent's name and role,
+    #              useful for logging or display purposes.
     def __str__(self):
         return f"{self.name} ({self.role})"
 
     # --- Plan Phase --- #
 
+    # Purpose: Generates a plan based on court history to determine needed information types
+    #          and prepares corresponding queries.
+    # Inputs:
+    #   - history_list: List[Dict[str, Any]] - List of court history entries (role, name, content).
+    # Outputs: Dict[str, Any] - Dictionary with:
+    #   - "plans": Dict[str, bool] - Indicates if experience, case, or legal info is needed.
+    #   - "queries": Dict[str, str] - Query strings for needed information types.
+    # Description: Orchestrates the planning phase by analyzing court history, deciding
+    #              required information types, and preparing queries. Logs if log_think is enabled.
+    
     def plan(self, history_list: List[Dict[str, Any]]) -> Dict[str, Any]:
         if self.log_think:
             self.logger.info(f"Agent ({self.role}) starting planning phase")
@@ -45,6 +72,12 @@ class Agent:
 
         return {"plans": plans, "queries": queries}
 
+    # Purpose: Analyzes court history to determine if experience, case, or legal info is needed.
+    # Inputs:
+    #   - history_context: str - Formatted string of court history.
+    # Outputs: Dict[str, bool] - Dictionary with keys "experience", "case", "legal" mapped to booleans.
+    # Description: Uses the LLM to analyze history and returns a JSON-parsed dictionary specifying
+    #              which information sources are required.
     def _get_plan(self, history_context: str) -> Dict[str, bool]:
         instruction = f"You are a {self.role}. {self.description}\n\n"
         prompt = "Based on the court history, analyze whether information from the experience, case, or legal database is needed. Return a JSON string with three key-value pairs for experience, case, and legal, with values being true or false."
@@ -53,9 +86,14 @@ class Agent:
         )
         return self._extract_plans(self.extract_response(response))
 
-    def _prepare_queries(
-        self, plans: Dict[str, bool], history_context: str
-    ) -> Dict[str, str]:
+    # Purpose: Prepares query strings for information types identified in the plan.
+    # Inputs:
+    #   - plans: Dict[str, bool] - Dictionary indicating needed information types.
+    #   - history_context: str - Formatted string of court history.
+    # Outputs: Dict[str, str] - Dictionary with query strings for needed information types.
+    # Description: Calls specific query preparation methods based on the plans dictionary
+    #              to generate query strings for required information.
+    def _prepare_queries(self, plans: Dict[str, bool], history_context: str) -> Dict[str, str]:
         queries = {}
         if plans["experience"]:
             queries["experience"] = self._prepare_experience_query(history_context)
@@ -65,6 +103,11 @@ class Agent:
             queries["legal"] = self._prepare_legal_query(history_context)
         return queries
 
+    # Purpose: Formulates a query to retrieve relevant experience information.
+    # Inputs:
+    #   - history_context: str - Formatted string of court history.
+    # Outputs: str - JSON string with a query statement (e.g., {"query": "劳动争议 处理方法 具体步骤"}).
+    # Description: Uses the LLM to generate a query for experience information to enhance logical reasoning.
     def _prepare_experience_query(self, history_context: str) -> str:
         instruction = f"You are a {self.role}. {self.description}\n\n"
         prompt = """
@@ -81,6 +124,11 @@ class Agent:
         )
         return self.extract_response(response)
 
+    # Purpose: Formulates a query to retrieve relevant case precedent information.
+    # Inputs:
+    #   - history_context: str - Formatted string of court history.
+    # Outputs: str - JSON string with query keywords (e.g., {"query": "劳动合同纠纷 判决 分析"}).
+    # Description: Uses the LLM to generate a query for case precedents to improve agility.
     def _prepare_case_query(self, history_context: str) -> str:
         instruction = f"You are a {self.role}. {self.description}\n\n"
         prompt = """
@@ -97,6 +145,11 @@ class Agent:
         )
         return self.extract_response(response)
 
+    # Purpose: Formulates a query to retrieve relevant legal information.
+    # Inputs:
+    #   - history_context: str - Formatted string of court history.
+    # Outputs: str - JSON string with query keywords (e.g., {"query": "侵权人行为 法律条文"}).
+    # Description: Uses the LLM to generate a query for legal references to enhance professionalism.
     def _prepare_legal_query(self, history_context: str) -> str:
         instruction = f"You are a {self.role}. {self.description}\n\n"
         prompt = """
@@ -115,6 +168,13 @@ class Agent:
 
     # --- Do Phase --- #
 
+    # Purpose: Executes the plan by preparing context and generating a response.
+    # Inputs:
+    #   - plan: Dict[str, Any] - Plan with queries for information retrieval (or empty dict).
+    #   - history_list: List[Dict[str, str]] - List of court history entries.
+    #   - prompt: str - User-provided prompt to respond to.
+    # Outputs: str - LLM-generated response.
+    # Description: Prepares context using plan or raw history and calls speak to generate a response.
     def execute(
         self, plan: Dict[str, Any], history_list: List[Dict[str, str]], prompt: str
     ) -> str:
@@ -124,11 +184,23 @@ class Agent:
             context = self._prepare_context(plan, history_list)
         return self.speak(context, prompt)
 
+    # Purpose: Generates a response using the LLM based on context and prompt.
+    # Inputs:
+    #   - context: str - Contextual information (e.g., court history, retrieved data).
+    #   - prompt: str - User-provided prompt.
+    # Outputs: str - LLM-generated response.
+    # Description: Combines role, description, context, and prompt to generate a response.
     def speak(self, context: str, prompt: str) -> str:
         instruction = f"You are a {self.role}. {self.description}\n\n"
         full_prompt = f"{context}\n\n{prompt}"
         return self.llm.generate(instruction=instruction, prompt=full_prompt)
 
+    # Purpose: Prepares a context string by querying the database based on the plan.
+    # Inputs:
+    #   - plan: Dict[str, Any] - Plan containing queries for information retrieval.
+    #   - history_list: List[Dict[str, str]] - List of court history entries.
+    # Outputs: str - Formatted context string combining retrieved data and history.
+    # Description: Queries database for experience, case, or legal info and appends history.
     def _prepare_context(
         self, plan: Dict[str, Any], history_list: List[Dict[str, str]]
     ) -> str:
@@ -161,25 +233,26 @@ class Agent:
 
     # --- Reflect Phase --- #
 
+    # Purpose: Reflects on court history to generate and store summaries for legal, experience, and case.
+    # Inputs:
+    #   - history_list: List[Dict[str, str]] - List of court history entries.
+    # Outputs: Dict[str, Any] - Dictionary with reflections:
+    #   - "legal_reflection": Reflection on legal knowledge.
+    #   - "experience_reflection": Reflection on experience.
+    #   - "case_reflection": Reflection on case precedents.
+    # Description: Summarizes case content and performs reflections, logging if enabled.
     def reflect(self, history_list: List[Dict[str, str]]):
-
         history_context = self.prepare_history_context(history_list)
-
         case_content = self.prepare_case_content(history_context)
 
-        # Legal knowledge base reflection
         legal_reflection = self._reflect_on_legal_knowledge(history_context)
         if self.log_think:
             self.logger.info(f"Agent ({self.role})\n\n{legal_reflection}")
 
-        # Experience reflection
-        experience_reflection = self._reflect_on_experience(
-            case_content, history_context
-        )
+        experience_reflection = self._reflect_on_experience(case_content, history_context)
         if self.log_think:
             self.logger.info(f"Agent ({self.role})\n\n{experience_reflection}")
 
-        # Case reflection
         case_reflection = self._reflect_on_case(case_content, history_context)
         if self.log_think:
             self.logger.info(f"Agent ({self.role})\n\n{case_reflection}")
@@ -190,8 +263,15 @@ class Agent:
             "case_reflection": case_reflection,
         }
 
+    # Purpose: Determines if legal references are needed and retrieves/stores them.
+    # Inputs:
+    #   - history_context: str - Formatted string of court history.
+    # Outputs: Dict[str, Any] - Dictionary with:
+    #   - "needed_reference": bool - If legal references are needed.
+    #   - "query": str - Query string (if needed).
+    #   - "laws": List - Processed legal references (if needed).
+    # Description: Checks if legal references are needed and retrieves/stores them if necessary.
     def _reflect_on_legal_knowledge(self, history_context: str) -> Dict[str, Any]:
-        # Determine if legal reference is needed
         need_legal = self._need_legal_reference(history_context)
 
         if need_legal:
@@ -199,18 +279,21 @@ class Agent:
             laws = search_law(query)
 
             processed_laws = []
-            for law in laws[:3]:  # Limit to 3 laws
+            for law in laws[:3]:
                 law_id = str(uuid.uuid4())
                 processed_law = self._process_law(law)
-                self.add_to_legal(
-                    law_id, processed_law["content"], processed_law["metadata"]
-                )
+                self.add_to_legal(law_id, processed_law["content"], processed_law["metadata"])
                 processed_laws.append(processed_law)
 
             return {"needed_reference": True, "query": query, "laws": processed_laws}
         else:
             return {"needed_reference": False}
 
+    # Purpose: Evaluates if additional legal references are needed.
+    # Inputs:
+    #   - history_context: str - Formatted string of court history.
+    # Outputs: bool - True if legal references are needed, False otherwise.
+    # Description: Uses LLM to determine if legal statutes enhance response quality.
     def _need_legal_reference(self, history_context: str) -> bool:
         instruction = (
             f"You are a {self.role}. {self.description}\n\n"
@@ -227,7 +310,6 @@ class Agent:
 
         cleaned_response = response.strip().lower()
 
-        # 检查响应是否包含 'true' 或 'false'
         if "true" in cleaned_response:
             return True
         elif "false" in cleaned_response:
@@ -235,47 +317,61 @@ class Agent:
         else:
             return False
 
+    # Purpose: Processes a law dictionary into a standardized format.
+    # Inputs:
+    #   - law: dict - Dictionary with law details (lawsName, articleTag, articleContent).
+    # Outputs: Dict[str, Any] - Dictionary with:
+    #   - "content": str - Concatenated law content.
+    #   - "metadata": Dict - Contains lawName and articleTag.
+    # Description: Formats a law entry for storage by combining its components.
     def _process_law(self, law: dict) -> Dict[str, Any]:
-
         law_content = (
             law["lawsName"] + " " + law["articleTag"] + " " + law["articleContent"]
         )
-
         return {
             "content": law_content,
             "metadata": {"lawName": law["lawsName"], "articleTag": law["articleTag"]},
         }
 
+    # Purpose: Generates and stores an experience summary.
+    # Inputs:
+    #   - case_content: str - Summary of the case.
+    #   - history_context: str - Formatted string of court history.
+    # Outputs: Dict[str, Any] - Dictionary with:
+    #   - "id": str - Unique identifier.
+    #   - "content": str - Experience description.
+    #   - "metadata": Dict - Context, focus points, guidelines.
+    # Description: Generates an experience summary and stores it in the database.
     def _reflect_on_experience(
         self, case_content: str, history_context: str
     ) -> Dict[str, Any]:
-
         experience = self._generate_experience_summary(case_content, history_context)
-
         experience_entry = {
             "id": str(uuid.uuid4()),
-            "content": experience["context"],  # 这里面放的应该是案件相关的描述
+            "content": experience["context"],
             "metadata": {
-                "context": experience["content"],  # 这里面放的应该是案件相关的指导用
+                "context": experience["content"],
                 "focusPoints": experience["focus_points"],
                 "guidelines": experience["guidelines"],
             },
         }
-
-        # Add to experience database
         self.add_to_experience(
             experience_entry["id"],
             experience_entry["content"],
             experience_entry["metadata"],
         )
-
         return experience_entry
 
+    # Purpose: Generates a structured experience summary for logical reasoning.
+    # Inputs:
+    #   - case_content: str - Summary of the case.
+    #   - history_context: str - Formatted string of court history.
+    # Outputs: Dict[str, Any] - JSON with context, content, focus_points, guidelines.
+    # Description: Uses LLM to create an experience summary with case background and strategies.
     def _generate_experience_summary(
         self, case_content: str, history_context: str
     ) -> Dict[str, Any]:
         instruction = f"你是{self.role}。{self.description}\n\n"
-
         prompt = f"""
         根据以下案例内容和对话历史，生成一个逻辑上连贯的经验总结。请确保回复内容逻辑严密，并能有效指导类似案件的处理。
 
@@ -296,25 +392,20 @@ class Agent:
             "guidelines": "指南1, 指南2, 指南3"
         }}
         """
-
         response = self.llm.generate(instruction, prompt)
-
         data = self.extract_response(response)
-
-        # 将列表转换为字符串
         return self.ensure_ex_string_fields(data)
-        # if data and isinstance(data, dict):
-        #    for key, value in data.items():
-        #        if isinstance(value, list):
-        #           data[key] = ", ".join(value)
-        # return data
 
+    # Purpose: Generates and stores a case summary for quick response formulation.
+    # Inputs:
+    #   - case_content: str - Summary of the case.
+    #   - history_context: str - Formatted string of court history.
+    # Outputs: Dict[str, Any] - Dictionary with id, content, and metadata (case type, keywords, etc.).
+    # Description: Generates a case summary and stores it in the database.
     def _reflect_on_case(
         self, case_content: str, history_context: str
     ) -> Dict[str, Any]:
-
         case_summary = self._generate_case_summary(case_content, history_context)
-
         case_entry = {
             "id": str(uuid.uuid4()),
             "content": case_summary["content"],
@@ -325,19 +416,21 @@ class Agent:
                 "response_directions": case_summary["response_directions"],
             },
         }
-
-        # Add to case database
         self.add_to_case(
             case_entry["id"], case_entry["content"], case_entry["metadata"]
         )
-
         return case_entry
 
+    # Purpose: Generates a structured case summary for quick response formulation.
+    # Inputs:
+    #   - case_content: str - Summary of the case.
+    #   - history_context: str - Formatted string of court history.
+    # Outputs: Dict[str, Any] - JSON with content, case_type, keywords, quick_reaction_points, response_directions.
+    # Description: Uses LLM to create a concise case summary to enhance response agility.
     def _generate_case_summary(
         self, case_content: str, history_context: str
     ) -> Dict[str, Any]:
         instruction = f"你是一个{self.role}，擅长快速分析案例并提供敏捷的回应。{self.description}\n\n"
-
         prompt = f"""
         根据以下案例内容和对话历史，生成一个简洁的案例摘要，以提高在类似情况下回应的敏捷性。请确保回复内容能够帮助快速理解案情并迅速制定回应策略。
 
@@ -359,32 +452,30 @@ class Agent:
             "quick_reaction_points": "要点1, 要点2, 要点3",
             "response_directions": "方向1, 方向2, 方向3"
         }}
-
-        注意：内容应该简洁明了，便于快速识别核心问题和制定回应策略。重点放在能够提高思维敏捷性的信息上,注意格式是上面描述的json。
         """
-
         response = self.llm.generate(instruction, prompt)
-
         data = self.extract_response(response)
-
-        # 确保是字符串
         return self.ensure_case_string_fields(data)
-        # if data and isinstance(data, dict):
-        #    for key, value in data.items():
-        #        if isinstance(value, list):
-        #            data[key] = ", ".join(value)
-        # return data
 
     # --- Helper Methods --- #
 
+    # Purpose: Extracts a JSON object from a text string.
+    # Inputs:
+    #   - response: str - Text containing a JSON object.
+    # Outputs: Any - Parsed JSON object.
+    # Description: Uses regex to find and parse a JSON object from the input text.
     def extract_json_from_txt(self, response: str) -> Any:
         pattern = r"\{.*?\}"
         match = re.search(pattern, response, re.DOTALL)
         json_str = match.group()
-
         data = json.loads(json_str)
         return data
 
+    # Purpose: Extracts and parses a response, prioritizing JSON if present.
+    # Inputs:
+    #   - response: str - Raw LLM response.
+    # Outputs: Any - Parsed JSON object or stripped response string.
+    # Description: Attempts to extract and parse JSON; returns stripped response if parsing fails.
     def extract_response(self, response: str) -> Any:
         json_match = re.search(r"\{.*\}", response, re.DOTALL)
         if json_match:
@@ -395,6 +486,11 @@ class Agent:
                 pass
         return response.strip()
 
+    # Purpose: Converts a plans string or dictionary into a standardized plan dictionary.
+    # Inputs:
+    #   - plans_str: str - String or dictionary containing plan information.
+    # Outputs: Dict[str, bool] - Dictionary with keys "experience", "case", "legal" mapped to booleans.
+    # Description: Parses input to ensure a standardized dictionary format for plans.
     def _extract_plans(self, plans_str: str) -> Dict[str, bool]:
         try:
             plans = plans_str if isinstance(plans_str, dict) else json.loads(plans_str)
@@ -406,17 +502,43 @@ class Agent:
         except json.JSONDecodeError:
             return {"experience": False, "case": False, "legal": False}
 
+    # Purpose: Adds an experience entry to the database.
+    # Inputs:
+    #   - id: str - Unique identifier.
+    #   - document: str - Experience content.
+    #   - metadata: Dict[str, Any] (optional) - Metadata for the experience.
+    # Outputs: None
+    # Description: Stores an experience entry in the database.
     def add_to_experience(
         self, id: str, document: str, metadata: Dict[str, Any] = None
     ):
         self.db.add_to_experience(id, document, metadata)
 
+    # Purpose: Adds a case entry to the database.
+    # Inputs:
+    #   - id: str - Unique identifier.
+    #   - document: str - Case content.
+    #   - metadata: Dict[str, Any] (optional) - Metadata for the case.
+    # Outputs: None
+    # Description: Stores a case entry in the database.
     def add_to_case(self, id: str, document: str, metadata: Dict[str, Any] = None):
         self.db.add_to_case(id, document, metadata)
 
+    # Purpose: Adds a legal entry to the database.
+    # Inputs:
+    #   - id: str - Unique identifier.
+    #   - document: str - Legal content.
+    #   - metadata: Dict[str, Any] (optional) - Metadata for the legal entry.
+    # Outputs: None
+    # Description: Stores a legal entry in the database.
     def add_to_legal(self, id: str, document: str, metadata: Dict[str, Any] = None):
         self.db.add_to_legal(id, document, metadata)
 
+    # Purpose: Formats court history into a string.
+    # Inputs:
+    #   - history_list: List[Dict[str, str]] - List of court history entries.
+    # Outputs: str - Formatted history string.
+    # Description: Converts history entries into a readable string format.
     def prepare_history_context(self, history_list: List[Dict[str, str]]) -> str:
         formatted_history = []
         for entry in history_list:
@@ -427,18 +549,25 @@ class Agent:
             formatted_history.append(formatted_entry)
         return "\n\n".join(formatted_history)
 
+    # Purpose: Summarizes case content from court history.
+    # Inputs:
+    #   - history_context: str - Formatted string of court history.
+    # Outputs: str - Three-sentence case summary.
+    # Description: Uses LLM to generate a concise case summary.
     def prepare_case_content(self, history_context: str) -> str:
         instruction = f"你是一个专业的法官。擅长总结案件情况。\n\n"
-
         prompt = "请根据法庭历史，用三句话总结案件情况。"
-
         response = self.llm.generate(
             instruction=instruction, prompt=prompt + "\n\n" + history_context
         )
-
         return response
-    
-    # 可选项：可以采用打分的方式进行反思
+
+    # Purpose: Evaluates a response based on agility, professionalism, and logic.
+    # Inputs:
+    #   - case_content: str - Summary of the case.
+    #   - response: str - Response to evaluate.
+    # Outputs: Dict[str, int] - Dictionary with scores for agility, professionalism, logic.
+    # Description: Uses LLM to score a response on three criteria (1-5 scale).
     def _evaluate_response(self, case_content: str, response: str) -> Dict[str, int]:
         instruction = ""
         prompt = f"""
@@ -455,34 +584,35 @@ class Agent:
             "logic": 评分
         }}
         """
-
         evaluation_result = self.llm.generate(instruction, prompt)
         return json.loads(evaluation_result)
 
+    # Purpose: Ensures specific fields in experience data are strings.
+    # Inputs:
+    #   - data: Dict - Data to process.
+    # Outputs: Dict - Data with ensured string fields.
+    # Description: Converts list fields to strings and validates field types.
     def ensure_ex_string_fields(self, data):
-        """
-        确保 data 中的特定字段是字符串。
-        """
         fields_to_check = {
             "context": str,
             "content": str,
             "focus_points": lambda x: ", ".join(x) if isinstance(x, list) else x,
             "guidelines": lambda x: ", ".join(x) if isinstance(x, list) else x,
         }
-
         for field, validator in fields_to_check.items():
             if field in data:
                 if callable(validator):
                     data[field] = validator(data[field])
                 elif not isinstance(data[field], validator):
                     raise ValueError(f"{field} must be a {validator.__name__}")
-
         return data
 
+    # Purpose: Ensures specific fields in case data are strings.
+    # Inputs:
+    #   - data: Dict - Data to process.
+    # Outputs: Dict - Data with ensured string fields.
+    # Description: Converts list fields to strings and validates field types.
     def ensure_case_string_fields(self, data):
-        """
-        确保 data 中的特定字段是字符串。
-        """
         fields_to_check = [
             "content",
             "case_type",
@@ -490,12 +620,10 @@ class Agent:
             "quick_reaction_points",
             "response_directions",
         ]
-
         for field in fields_to_check:
             if field in data:
                 if isinstance(data[field], list):
                     data[field] = ", ".join(data[field])
                 elif not isinstance(data[field], str):
                     raise ValueError(f"{field} must be a list or a string")
-
         return data
